@@ -14,6 +14,8 @@ class Provider extends AbstractProvider implements ProviderInterface
      */
     const IDENTIFIER = 'SLACK';
 
+    public $user;
+
     /**
      * {@inheritdoc}
      */
@@ -25,8 +27,31 @@ class Provider extends AbstractProvider implements ProviderInterface
     protected function getAuthUrl($state)
     {
         return $this->buildAuthUrlFromBase(
-            'https://slack.com/oauth/authorize', $state
+            'https://slack.com/oauth/authorize',
+            $state
         );
+    }
+
+    public function user()
+    {
+        if ($this->hasInvalidState()) {
+            throw new InvalidStateException();
+        }
+
+        $response = $this->getAccessTokenResponse($this->getCode());
+        $this->user = $response['user'];
+        $this->credentialsResponseBody = $response;
+
+        $token = $this->parseAccessToken($response);
+        $user = $this->mapUserToObject($this->user);
+
+        if ($user instanceof User) {
+            $user->setAccessTokenResponseBody($this->credentialsResponseBody);
+        }
+
+        return $user->setToken($token)
+                    ->setRefreshToken($this->parseRefreshToken($response))
+                    ->setExpiresIn($this->parseExpiresIn($response));
     }
 
     /**
@@ -55,11 +80,11 @@ class Provider extends AbstractProvider implements ProviderInterface
     protected function mapUserToObject(array $user)
     {
         return (new User())->setRaw($user)->map([
-            'id' => $user['user']['id'],
-            'nickname' => $user['user']['name'],
-            'name' => $user['user']['name'],
-            'email' => $user['user']['email'],
-            'avatar' => $user['user']['image_192'],
+            'id' => $user['id'],
+            'nickname' => $user['name'],
+            'name' => $user['name'],
+            'email' => $user['email'],
+            'avatar' => $user['image_192'],
         ]);
     }
 
